@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>ブロック崩し</title>
+	<style>
+		<!--簡単なCSSを記述-->
+		{padding : 0px; margin: 0px;}
+		canvas {background-color:#eee; display: block; margin: 0px auto;}
+	</style>
+</head>
+<body>
+
+	<canvas id="myCanvas" width="480px" height="380px"></canvas>
+
+<script>
+	//JavaScriptのコード
+	//canvasに描画するために、容代への参照を取得
+	//<canvas>要素への参照をcanvasに保存
+	const canvas = document.getElementById("myCanvas");
+	//2D描画コンテキストを保存するためにctx変数を作成
+	let ctx = canvas.getContext("2d");
+	let ball = canvas.getContext("2d");
+	//Canvasの映像を毎フレーム、定期的に更新し続けるためには、何度も実行されるような関数を定義する必要がある。setInterval()やrequestAnimationFrame()といったJavaScriptのタイミング関数を用いれば同じ関数を何度も実行できる。
+	//ボールのx、y座標
+	let x = canvas.width/2;
+	let y = canvas.height/2;
+	//ボールの色
+	let boll;
+	//玉の移動する速度
+	let dx = 2;
+	let dy = -2;
+	//玉（円）の半径
+	const ballRadius = 10;
+	//パドルに用いる変数
+	const paddleHeight = 10;//パドルの高さ
+	const paddleWidth = 75;//パドルの幅
+	let paddleX = (canvas.width-paddleWidth)/2;//x軸上の開始地点
+	let paddleSpeed = 7;//パドルの移動速度
+	//ボタンが押されたか判定するフラグ
+	let rightPressed = false;
+	let leftPressed = false;
+	//ブロック変数
+	let brickRowCount = 3;//ブロックの行
+	let brickcolumnCount = 5;//ブロックの列
+	let brickWidth = 75;//ブロックの幅
+	let brickHeight = 20;//ブロックの高さ
+	let brickPadding = 10;//ブロック同士の隙間
+	let brickOffsetTop = 30;//キャンバスの端に表示されないための上端からの位置
+	let brickOffsetLeft = 30;//キャンバスの端に表示されないための左端からの位置
+	//ブロックの2次元配列
+	//2次元配列はブロックの列 (c) を含んでおり、列は行 (r)を含み、行はそれぞれのブロックが描画される画面上のx座標とy座標をもつオブジェクトを含んでる
+	let bricks = [];
+	for(let i = 0; i , i < brickcolumnCount; i++)
+	{
+		bricks[i] = [];
+		for(let j = 0; j <brickRowCount; j++)
+		{
+			bricks[i][j] = { x: 0, y: 0,　status:1　};
+		}
+	}
+
+	//スコア
+	let score = 0;
+	//プレイヤーのライフ
+	let life = 5;
+
+	//ボタンが押されたのを検知するため、2つのイベントリスナーを設定
+	document.addEventListener("keydown", keyDownHandler, false);
+	document.addEventListener("keyup", keyUpHandler, false);
+	//マウスの操作を監視
+	document.addEventListener("mousemove",MouseMoveHandler,false);
+
+	//キーボードのキーのどれかに対してkeydownイベントが発火したとき (どれかが押されたとき) 、keyDownHandler()関数が実行されます。2つ目のリスナーについても同様で、(そのキーが押されなくなったき) keyupイベントはkeyUpHandler()関数を呼びだす。
+
+	//キーが押された時の処理関数
+	function keyDownHandler(e) 
+	{
+	    if(e.key == "Right" || e.key == "ArrowRight") {
+	        rightPressed = true;
+	    }
+	    else if(e.key == "Left" || e.key == "ArrowLeft") {
+	        leftPressed = true;
+	    }
+	}
+	//キーを離した時の処理関数
+	function keyUpHandler(e) 
+	{
+	    if(e.key == "Right" || e.key == "ArrowRight") {
+	        rightPressed = false;
+	    }
+	    else if(e.key == "Left" || e.key == "ArrowLeft") {
+	        leftPressed = false;
+	    }
+	}
+	//マウスを動かしたときの処理関数
+	function MouseMoveHandler(e)
+	{
+		//まずビューポートの水平方向のマウスの位置 (e.clientX) からキャンバスの左端とビューポートの左端の距離 (canvas.offsetLeft) をひいてrelativeXの値を導出
+		let relativeX = e.clientX - canvas.OffsetLeft;
+		//もしカーソルの相対X座標が0より大きくCanvasの幅より小さいのならば、カーソルはキャンバス内にある
+		if(relativeX > 0 && relativeX < canvas.width)
+		{
+			//paddleX (パドルの左端と紐付けられている) は、パドルの中点で対称に動くようにrelativeXの値からパドルの幅の半分をひいた値に設定
+			paddleX = relativeX - paddleWidth/2;
+		}
+	}
+
+	//玉の描画関数
+	function DrawBall()
+	{
+		ball.beginPath();
+		ball.arc(x,y,ballRadius,0,Math.PI*2,false);
+		ball.fillStyle="blue";
+		ball.fill();
+		ball.closePath();
+	}
+
+	//パドル描画関数
+	function DrawPaddle()
+	{
+		ctx.beginPath();
+		ctx.rect(paddleX,canvas.height - paddleHeight,paddleWidth,paddleHeight);
+		ctx.fillStyle="blue";
+		ctx.fill();
+		ctx.closePath();
+	}
+
+	//ブロックの描画関数
+	function DrawBricks()
+	{
+		for(let i = 0; i < brickcolumnCount; i++)
+		{
+			for(let j = 0; j < brickRowCount; j++)
+			{
+				//statusが１のときのみ描画
+				if(bricks[i][j].status == 1)
+				{
+					let brickX = (i*(brickWidth+brickPadding))+brickOffsetLeft;
+					let brickY = (j*(brickHeight+brickPadding))+brickOffsetTop;
+					bricks[i][j].x = brickX;
+					bricks[i][j].y = brickY;
+					ctx.beginPath();
+					ctx.rect(brickX,brickY,brickWidth,brickHeight);
+					ctx.fillStyle="red";
+					ctx.fill();
+					ctx.closePath();
+				}
+			}
+		}	
+	}
+	
+	//衝突検知関数
+	function collisioDetection()
+	{
+		for(let i = 0; i < brickcolumnCount; i++)
+		{
+			for(let j = 0; j < brickRowCount; j++)
+			{
+				//ループの中だけでオブジェクト補保持する変数
+				let obj = bricks[i][j];
+				if(obj.status == 1) {
+					if(x > obj.x && x < obj.x +brickWidth && y > obj.y && y < obj.y + brickHeight)
+					{
+						dy =-dy;
+						obj.status = 0;
+						score++;
+						if(score == brickRowCount*brickcolumnCount)
+						{
+							alert("君の勝ちやるやん");
+							document.location.reload();
+						}
+					}
+				}
+			}
+
+		}
+	}
+
+	//スコア描画関数
+	function DrawScore()
+	{
+		ctx.font = "16px Arial";
+		ctx.fillStyle="#0095DD";
+		//最初のパラメーターは文章自体です。最後の2つのパラメーターは文章がキャンバス上に置かれる座標。
+		ctx.fillText("Score: "+score,8,20);
+	}
+
+	//ライフ描画関数
+	function DrawLife()
+	{
+		ctx.font = "16px Arial";
+		ctx.fillStyle="#0095DD";
+		//最初のパラメーターは文章自体です。最後の2つのパラメーターは文章がキャンバス上に置かれる座標。
+		ctx.fillText("Life: "+life,16,20);
+	}
+	//描画関数
+	function Draw()
+	{
+		//描画
+		//Canvasの内容を消去するメソッド、clearRect()。このメソッドは4つのパラメータをとる。四角形の左上端のx、y座標と四角形の右下端のx、y座標。この四角形で囲われた領域にある内容全てが消去される。
+		ctx.clearRect(0,0,canvas.width,canvas.height);
+		DrawBall();
+		DrawPaddle();
+		DrawBricks();
+		DrawScore();
+		DrawLife();
+		collisioDetection();
+
+		//玉の当たり判定
+		if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+        dx = -dx;
+	    }
+	    if (y + dy < ballRadius) 
+	    {
+	        dy = -dy;
+	    }
+	    else if (y + dy > canvas.height - ballRadius) {
+	        if (x > paddleX && x < paddleX + paddleWidth) {
+	            if (y = y - paddleHeight) {
+	                dy = -dy;
+	            }
+	     }
+        else
+        {
+        	//アラートを表示して、ページを再読み込みしてゲームを再開する
+        	life--;
+        	if(!life)
+        	{
+	            alert("君の負け");
+	            document.location.reload();
+	            clearInterval(interval); // Needed for Chrome to end game
+       		}
+       		else
+       		{
+       			x = canvas.width/2;
+				y = canvas.height/2;
+				dx = 2;
+				dy = -2;
+				paddleX = (canvas.width-paddleWidth)/2
+       		}
+        }
+    }
+
+		//パドルの移動
+		 if(rightPressed && paddleX < canvas.width-paddleWidth) 
+		 {
+	        paddleX += paddleSpeed;
+		 }
+	     else if(leftPressed && paddleX > 0) 
+		 {
+			paddleX -= paddleSpeed;
+		 }
+
+		x+=dx;
+		y+=dy;
+		Draw();//自分で自分自身を何回も呼び出す
+	}
+	//ブラウザがフレームレートを適切に同期し図形を必要なときだけ描画する
+	requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>
